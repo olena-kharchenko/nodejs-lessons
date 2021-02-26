@@ -1,34 +1,54 @@
 const db = require('./db')
-const { v4: uuid } = require('uuid')
+const { ObjectID } = require('mongodb')
+
+const getCollection = async (db, name) => {
+  const client = await db
+  const collection = await client.db().collection(name)
+  return collection
+}
 
 const getAll = async () => {
-  return db.get('cats').value()
+  const collection = await getCollection(db, 'cats')
+  const results = await collection.find({}).toArray()
+  return results
 }
 
 const getById = async (id) => {
-  return db.get('cats').find({ id }).value()
-}
-
-const remove = async (id) => {
-  const [record] = db.get('cats').remove({ id }).write()
-  return record
+  const collection = await getCollection(db, 'cats')
+  const objectId = new ObjectID(id)
+  console.log(objectId.getTimestamp())
+  const [result] = await collection.find({ _id: objectId }).toArray()
+  return result
 }
 
 const create = async (body) => {
-  const id = uuid()
   const record = {
-    id,
     ...body,
-    ...(body.isVaccinated ? {} : { isVaccinated: false }) // свойство по умолчанию
+    ...(body.isVaccinated ? {} : { isVaccinated: false }), // свойство по умолчанию
   }
-  db.get('cats').push(record).write()
-  return record
+  const collection = await getCollection(db, 'cats')
+  const {
+    ops: [result],
+  } = await collection.insertOne(record)
+  return result
 }
 
 const update = async (id, body) => {
-  const record = db.get('cats').find({ id }).assign(body).value()
-  db.write()
-  return record.id ? record : null
+  const collection = await getCollection(db, 'cats')
+  const objectId = new ObjectID(id)
+  const { value: result } = await collection.findOneAndUpdate(
+    { _id: objectId },
+    { $set: body },
+    { returnOriginal: false },
+  )
+  return result
+}
+
+const remove = async (id) => {
+  const collection = await getCollection(db, 'cats')
+  const objectId = new ObjectID(id)
+  const { value: result } = await collection.findOneAndDelete({ _id: objectId })
+  return result
 }
 
 module.exports = {
@@ -36,5 +56,5 @@ module.exports = {
   getById,
   remove,
   create,
-  update
+  update,
 }
